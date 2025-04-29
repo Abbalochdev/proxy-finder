@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/pmlsdev/proxy-finder)](https://github.com/pmlsdev/proxy-finder/issues)
+[![GitHub issues](https://img.shields.io/github/issues/Abbalochdev/proxy-finder)](https://github.com/pmlsdev/proxy-finder/issues)
 
 A powerful command-line tool for managing and rotating IP proxies with real-time validation and country-specific filtering.
 
