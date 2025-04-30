@@ -9,13 +9,13 @@ class ProxyValidator:
     """Handles proxy validation and testing."""
     
     def __init__(self, 
-                 timeout: float = 10.0, 
+                 timeout: float = 15.0, 
                  test_url: str = 'https://httpbin.org/ip'):
         """
         Initialize ProxyValidator with configurable settings.
         
         Args:
-            timeout (float): Connection timeout in seconds. Defaults to 10.0.
+            timeout (float): Connection timeout in seconds. Defaults to 15.0.
             test_url (str): URL to test proxy connectivity. Defaults to httpbin.org.
         """
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -33,8 +33,8 @@ class ProxyValidator:
             bool: True if proxy is valid, False otherwise.
         """
         try:
-            # Use a very lenient timeout for better success rate
-            validation_timeout = min(15.0, self.timeout)
+            # Use a more reasonable timeout for validation
+            validation_timeout = min(20.0, self.timeout)
             
             # Split the proxy into host and port
             host, port = proxy.split(':')
@@ -46,10 +46,8 @@ class ProxyValidator:
                 sock.connect((host, int(port)))
                 sock.close()
                 # If we can connect to the socket, consider it valid
-                # This is a very lenient check but will help find more proxies
                 return True
             except (socket.timeout, socket.error):
-                # If socket connection fails, the proxy is definitely not working
                 return False
         
         except Exception:
@@ -88,8 +86,8 @@ class ProxyValidator:
             # If socket is open, we'll consider this a valid proxy
             # This is extremely lenient but will help find more proxies
             
-            # Use a very lenient timeout for better success rate
-            validation_timeout = min(15.0, self.timeout)
+            # Use a more reasonable timeout for validation
+            validation_timeout = min(20.0, self.timeout)
             
             proxies = {
                 'http': f'http://{proxy}',

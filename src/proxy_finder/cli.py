@@ -11,6 +11,7 @@ from rich.text import Text
 from .core.rotation import ProxyManager
 from .core.enhanced_fetcher import ProxyFetcher
 from .core.validator import ProxyValidator
+from .core.country_fetcher import CountryProxyFetcher
 from .utils.config import ConfigManager
 from .utils.logging import setup_logging
 
@@ -18,54 +19,69 @@ def display_proxy_table(proxies: List[Dict[str, Any]], console: Console):
     """
     Display proxies in a formatted table
     """
+    if not proxies:
+        console.print("[red]No valid proxies found. Try again with different filters.[/red]")
+        return
+
     # Create table with wider columns for better visibility
     table = Table(show_header=True, header_style="bold magenta", show_lines=True)
-    table.add_column("IP", style="cyan", width=20, no_wrap=True)  # Wider width for IP
-    table.add_column("Port", style="cyan", width=8, justify="right")  # Adjusted width and right-aligned port
-    table.add_column("Country", style="green", width=10)  # Fixed width for country
-    table.add_column("Anonymity", style="yellow", width=12)  # Fixed width for anonymity
-    table.add_column("Speed (s)", style="red", width=10)  # Fixed width for speed
-    table.add_column("Auth", style="magenta", width=8)  # Fixed width for auth
-    table.add_column("Last Checked", style="blue", width=20)  # Fixed width for timestamp
+    table.add_column("IP", style="cyan", width=20, no_wrap=True)
+    table.add_column("Port", style="cyan", width=8, justify="right")
+    table.add_column("Country", style="green", width=10)
+    table.add_column("Anonymity", style="yellow", width=12)
+    table.add_column("Speed (s)", style="red", width=10)
+    table.add_column("Auth", style="magenta", width=8)
+    table.add_column("Last Checked", style="blue", width=20)
     
-    for proxy in proxies:
-        # Determine auth status with icon
-        auth_status = "Yes" if proxy.get('requires_auth', False) else "No"
-        
-        # Format speed with color based on performance
-        speed = proxy.get('speed', 0)
-        speed_str = str(speed)
-        if speed < 1.0:
-            speed_str = f"[green]{speed}[/green]"
-        elif speed < 3.0:
-            speed_str = f"[yellow]{speed}[/yellow]"
-        else:
-            speed_str = f"[red]{speed}[/red]"
-        
-        # Split proxy into IP and port for better display
-        proxy_str = proxy.get('proxy', 'unknown')
-        if ':' in proxy_str:
-            ip, port = proxy_str.split(':', 1)
-        else:
-            ip, port = proxy_str, 'unknown'
-        
-        # Add row with full IP address (no truncation needed with wider column)
-        table.add_row(
-            ip,
-            port,
-            proxy.get('country', 'unknown'),
-            proxy.get('anonymity', 'unknown'),
-            speed_str,
-            auth_status,
-            proxy.get('last_checked', 'unknown')
-        )
+    # Add rows with loading indicator
+    with Progress(console=console) as progress:
+        task = progress.add_task("[cyan]Processing proxies...", total=len(proxies))
+        for proxy in proxies:
+            progress.advance(task)
+            
+            # Format speed with color based on performance
+            speed = proxy.get('speed', 0)
+            speed_str = str(round(speed, 2))
+            if speed < 1.0:
+                speed_str = f"[green]{speed_str}[/green]"
+            elif speed < 3.0:
+                speed_str = f"[yellow]{speed_str}[/yellow]"
+            else:
+                speed_str = f"[red]{speed_str}[/red]"
+            
+            # Split proxy into IP and port for better display
+            proxy_str = proxy.get('proxy', 'unknown')
+            if ':' in proxy_str:
+                ip, port = proxy_str.split(':', 1)
+            else:
+                ip = proxy_str
+                port = ""
+            
+            table.add_row(
+                ip,
+                port,
+                proxy.get('country', ''),
+                proxy.get('anonymity', ''),
+                speed_str,
+                proxy.get('auth', ''),
+                proxy.get('last_checked', '')
+            )
     
     console.print(table)
     
-    # Add a note about authentication if needed
-    auth_required = any(proxy.get('requires_auth', False) for proxy in proxies)
-    if auth_required:
-        console.print("[yellow]Note: Some proxies require authentication. These can still be used with proper credentials.[/yellow]")
+    # Add summary statistics
+    total_proxies = len(proxies)
+    avg_speed = sum(p.get('speed', 0) for p in proxies) / total_proxies if total_proxies > 0 else 0
+    fastest = min(proxies, key=lambda x: x.get('speed', float('inf'))) if proxies else None
+    slowest = max(proxies, key=lambda x: x.get('speed', float('inf'))) if proxies else None
+    
+    console.print("\n[bold]Proxy Statistics:[/bold]")
+    console.print(f"Total proxies found: [cyan]{total_proxies}[/cyan]")
+    console.print(f"Average speed: [cyan]{round(avg_speed, 2)}s[/cyan]")
+    if fastest:
+        console.print(f"Fastest proxy: [cyan]{fastest['proxy']} ({round(fastest['speed'], 2)}s)[/cyan]")
+    if slowest:
+        console.print(f"Slowest proxy: [cyan]{slowest['proxy']} ({round(slowest['speed'], 2)}s)[/cyan]")
 
 def main():
     """
@@ -179,78 +195,33 @@ def main():
             country = args.country
             countries = [country] if country else None
             
-        proxy_manager = ProxyManager(country=country, timeout=args.timeout)
+        if country:
+            # Use the new country-specific fetcher for better performance
+            try:
+                proxy_fetcher = CountryProxyFetcher(country_code=country, timeout=args.timeout)
+                all_proxies = proxy_fetcher.fetch_proxies(max_proxies=args.number)
+            except ValueError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                console.print("[yellow]Valid country codes include:[/yellow]")
+                console.print("[cyan]US (United States), GB (United Kingdom), DE (Germany), FR (France),[/cyan]")
+                console.print("[cyan]JP (Japan), CA (Canada), AU (Australia), IN (India), etc.[/cyan]")
+                sys.exit(1)
+        else:
+            # Use the regular fetcher for all countries
+            proxy_manager = ProxyManager(timeout=args.timeout)
+            all_proxies = proxy_manager.fetcher.fetch_proxies()
         
         if args.action == 'fetch':
-            # Use a more reasonable timeout for better success rate
-            validation_timeout = min(8.0, args.timeout)
-            proxy_manager.validator.timeout = validation_timeout
+            # Sort proxies based on the specified field
+            if args.sort == 'speed':
+                all_proxies = sorted(all_proxies, key=lambda x: x.get('speed', float('inf')))
+            elif args.sort == 'country':
+                all_proxies = sorted(all_proxies, key=lambda x: x.get('country', ''))
+            elif args.sort == 'anonymity':
+                all_proxies = sorted(all_proxies, key=lambda x: x.get('anonymity', ''))
             
-            with Progress() as progress:
-                task = progress.add_task(f"[cyan]Fetching proxies...", total=100)
-                
-                # Get proxies with country filter if specified
-                all_proxies = []
-                
-                # If multiple countries were specified, fetch from each
-                if countries and len(countries) > 1:
-                    total_countries = len(countries)
-                    for i, country_code in enumerate(countries):
-                        progress.update(task, description=f"[cyan]Fetching proxies from {country_code}...", 
-                                        completed=40 * (i + 1) / total_countries)
-                        
-                        # Create a temporary fetcher for this country
-                        country_fetcher = ProxyFetcher(country=country_code, timeout=args.timeout)
-                        try:
-                            country_proxies = country_fetcher.fetch_proxies()
-                            all_proxies.extend(country_proxies)
-                        except Exception as e:
-                            logger.warning(f"Error fetching proxies from {country_code}: {e}")
-                else:
-                    # Just use the main proxy manager's fetcher
-                    all_proxies = proxy_manager.fetcher.fetch_proxies()
-                
-                progress.update(task, description="[cyan]Validating proxies...", completed=40)
-                
-                # Increase the number of proxies to validate for better success rate
-                max_to_check = min(50, args.number * 5)
-                
-                # Validate proxies
-                valid_proxies = []
-                for i, proxy in enumerate(all_proxies[:max_to_check]):
-                    # Update progress based on validation progress
-                    progress.update(task, completed=40 + (i * 60 / max_to_check))
-                    
-                    proxy_details = proxy_manager.validator.get_proxy_details(proxy_data=proxy)
-                    if proxy_details:
-                        valid_proxies.append(proxy_details)
-                        # Print each valid proxy as we find it for immediate feedback
-                        auth_info = "requires auth" if proxy_details.get('requires_auth', False) else "no auth"
-                        print(f"INFO     Found valid proxy: {proxy_details['proxy']} ({proxy_details['country']}, {proxy_details['anonymity']}, {proxy_details['speed']}s, {auth_info})")
-                        if len(valid_proxies) >= args.number:
-                            break
-                
-                progress.update(task, completed=100)
-            
-            # Filter by anonymity if specified
-            if args.anonymity and valid_proxies:
-                valid_proxies = [p for p in valid_proxies if p.get('anonymity') == args.anonymity]
-            
-            # Sort results (only if we have results)
-            if valid_proxies:
-                if args.sort == 'speed':
-                    valid_proxies.sort(key=lambda x: x.get('speed', float('inf')))
-                elif args.sort == 'country':
-                    valid_proxies.sort(key=lambda x: x.get('country', 'unknown'))
-                elif args.sort == 'anonymity':
-                    anonymity_rank = {'elite': 0, 'anonymous': 1, 'transparent': 2, 'unknown': 3}
-                    valid_proxies.sort(key=lambda x: anonymity_rank.get(x.get('anonymity', 'unknown'), 3))
-            
-            # Display results
-            if valid_proxies:
-                display_proxy_table(valid_proxies[:args.number], console)
-            else:
-                console.print("[red]No valid proxies found. Try again or use different filters.[/red]")
+            # Display the proxies in a formatted table
+            display_proxy_table(all_proxies[:args.number], console)
         
         elif args.action == 'validate':
             with Progress() as progress:
