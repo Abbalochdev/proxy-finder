@@ -2,7 +2,7 @@
 
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/pmlsdev/proxy-finder)](https://github.com/pmlsdev/proxy-finder/issues)
+[![GitHub issues](https://img.shields.io/github/issues/Abbalochdev/proxy-finder)](https://github.com/Abbalochdev/proxy-finder/issues)
 
 A powerful command-line tool for managing and rotating IP proxies with real-time validation and country-specific filtering.
 
@@ -26,17 +26,11 @@ A powerful command-line tool for managing and rotating IP proxies with real-time
 - Python 3.8 or higher
 - pip (Python package manager)
 
-### Install from PyPI
-
-```bash
-pip install proxy-finder
-```
-
 ### Install from Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/pmlsdev/proxy-finder.git
+git clone https://github.com/Abbalochdev/proxy-finder.git
 cd proxy-finder
 
 # Install dependencies
@@ -136,9 +130,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For support, please:
 
-1. Check the [issues](https://github.com/pmlsdev/proxy-finder/issues) page
+1. Check the [issues](https://github.com/Abbalochdev/proxy-finder/issues) page
 2. Create a new issue if your problem isn't listed
-3. Join our [Discord](https://discord.gg/proxy-finder) community
 
 ## Acknowledgments
 
@@ -203,13 +196,6 @@ proxy-finder/
 4. Rotate proxies regularly to maintain reliability
 5. Monitor proxy performance metrics
 
-## Community
-
-- Join our Discord community for support and discussions
-- Contribute to the project on GitHub
-- Share your use cases and improvements
-- Help other users with their questions
-
 ## Future Development
 
 Planned features:
@@ -228,9 +214,8 @@ Planned features:
 
 For questions, suggestions, or bug reports:
 
-- Email: support@proxy-finder.com
-- GitHub: https://github.com/pmlsdev/proxy-finder
-- Discord: https://discord.gg/proxy-finder
+- Email: developerno424@gmail.com
+- GitHub: https://github.com/Abbalochdev/proxy-finder
 
 ## Disclaimer
 
