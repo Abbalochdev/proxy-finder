@@ -5,6 +5,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/Abbalochdev/proxy-finder)](https://github.com/Abbalochdev/proxy-finder/issues)
 
 A powerful command-line tool for managing and rotating IP proxies with real-time validation and country-specific filtering.
+![Image](https://github.com/user-attachments/assets/1f59137a-9b73-488f-89a7-291280166105)
 
 ## Features
 
