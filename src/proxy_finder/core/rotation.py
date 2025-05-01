@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 import logging
+import random
 
 from ..utils.logging import setup_logging
 from .enhanced_fetcher import ProxyFetcher
@@ -32,6 +33,8 @@ class ProxyManager:
         self.country = country
         self.countries = countries or ([country] if country else None)
         self.anonymity = anonymity
+        self.proxy_cache = {}
+        self.static_fetcher = ProxyFetcher(country=None, timeout=timeout)
 
     def get_proxy(self) -> Optional[Dict[str, Any]]:
         """
@@ -80,6 +83,22 @@ class ProxyManager:
                             self.logger.info(f"Found valid proxy: {proxy_details['proxy']}")
                             return proxy_details
                 
+                # Validate static proxies
+                for proxy_data in static_proxies:
+                    proxy_str = proxy_data.get('proxy')
+                    
+                    # Check cache first
+                    if proxy_str in self.proxy_cache:
+                        self.logger.info(f"Using cached static proxy: {proxy_str}")
+                        return self.proxy_cache[proxy_str]
+                    
+                    proxy_details = self.validator.get_proxy_details(proxy_data=proxy_data)
+                    if proxy_details:
+                        self.logger.info(f"Found valid static proxy: {proxy_details['proxy']}")
+                        # Cache the proxy
+                        self.proxy_cache[proxy_str] = proxy_details
+                        return proxy_details
+                
                 self.logger.warning(f"No valid proxies found in attempt {attempt + 1}")
             
             except Exception as e:
@@ -113,8 +132,11 @@ class ProxyManager:
         # Use countries from parameter or instance variable
         target_countries = countries or self.countries
 
+        # Loop until we have enough proxies or reach max attempts
         while len(valid_proxies) < num_proxies and attempts < max_attempts * num_proxies:
             try:
+                self.logger.info(f"Rotation attempt {attempts + 1}/{max_attempts * num_proxies}, found {len(valid_proxies)}/{num_proxies} proxies")
+                
                 all_proxies = []
                 
                 # If multiple countries are specified, fetch from each
@@ -130,22 +152,52 @@ class ProxyManager:
                             self.logger.warning(f"Error fetching from {country_code}: {e}")
                 else:
                     # Use the main fetcher
-                    all_proxies = self.fetcher.fetch_proxies()
+                    try:
+                        all_proxies = self.fetcher.fetch_proxies()
+                    except Exception as e:
+                        self.logger.warning(f"Error fetching with main fetcher: {e}")
+                        
+                        # Try static fetcher as fallback if we have few proxies
+                        if len(valid_proxies) < num_proxies / 2:
+                            self.logger.info("Using static fetcher as fallback")
+                            try:
+                                static_proxies = self.static_fetcher.fetch_proxies()
+                                all_proxies.extend(static_proxies)
+                            except Exception as static_e:
+                                self.logger.warning(f"Error with static fetcher: {static_e}")
                 
                 # Filter out already seen proxies
                 new_proxies = [p for p in all_proxies if p.get('proxy') not in seen_proxies]
                 if not new_proxies:
                     self.logger.warning("No new proxies available")
-                    break
+                    attempts += 1
+                    # If we're on our last few attempts, retry some seen proxies randomly
+                    if attempts > max_attempts * num_proxies * 0.8 and all_proxies:
+                        # Take some random proxies to retry
+                        random_selection = random.sample(all_proxies, min(10, len(all_proxies)))
+                        new_proxies = random_selection
+                        self.logger.info(f"Retrying {len(new_proxies)} previously seen proxies")
+                    else:
+                        continue
 
                 for proxy_data in new_proxies:
                     proxy_str = proxy_data.get('proxy')
+                    if not proxy_str:
+                        continue
+                        
                     seen_proxies.add(proxy_str)
+                    
+                    # Check cache first
+                    if proxy_str in self.proxy_cache and len(valid_proxies) < num_proxies:
+                        valid_proxies.append(self.proxy_cache[proxy_str])
+                        self.logger.info(f"Using cached proxy: {proxy_str}")
+                        continue
                     
                     # Validate and get proxy details
                     proxy_details = self.validator.get_proxy_details(proxy_data=proxy_data)
                     if proxy_details:
                         valid_proxies.append(proxy_details)
+                        self.proxy_cache[proxy_str] = proxy_details
                         self.logger.info(f"Found valid proxy: {proxy_str}")
                         
                         if len(valid_proxies) >= num_proxies:
