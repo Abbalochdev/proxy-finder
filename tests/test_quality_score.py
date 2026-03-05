@@ -4,11 +4,11 @@ from proxy_finder.core.validator import ProxyValidator
 def test_quality_score_prioritizes_faster_valid_elite_proxy():
     validator = ProxyValidator()
     fast_elite = validator.calculate_quality_score('valid', 0.5, 'elite')
-    slow_transparent = validator.calculate_quality_score('unvalidated', 8.0, 'transparent')
-    assert fast_elite > slow_transparent
+    low_quality_proxy = validator.calculate_quality_score('unvalidated', 8.0, 'transparent')
+    assert fast_elite > low_quality_proxy
 
 
-def test_quality_score_is_bounded_for_slow_or_missing_speed():
+def test_quality_score_treats_invalid_speed_sentinel_and_missing_speed_equally():
     validator = ProxyValidator()
     very_slow = validator.calculate_quality_score('valid', 999.99, 'anonymous')
     missing_speed = validator.calculate_quality_score('valid', None, 'anonymous')

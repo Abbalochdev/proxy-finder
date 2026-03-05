@@ -11,11 +11,21 @@ logger = logging.getLogger('proxy_finder')
 
 class ProxyValidator:
     """Handles proxy validation and testing."""
+    # Sentinel speed used when a proxy cannot complete an HTTP check.
+    INVALID_SPEED_SENTINEL = 999.99
+    MAX_SPEED_THRESHOLD = 10.0
+    SPEED_WEIGHT = 50
+    STATUS_WEIGHT = 30
+    ANONYMITY_WEIGHT = 20
+    STATUS_WEIGHTS = {
+        'valid': 1.0,
+        'unvalidated': 0.4
+    }
     ANONYMITY_WEIGHTS = {
         'elite': 1.0,
         'anonymous': 0.7,
         'transparent': 0.4,
-        'unknown': 0.5
+        'unknown': 0.3
     }
     
     def __init__(self, 
@@ -71,16 +81,27 @@ class ProxyValidator:
 
         Prioritizes response speed and validation status, then anonymity level.
         """
-        try:
-            bounded_speed = max(0.0, min(float(speed), 10.0))
-        except (TypeError, ValueError):
-            bounded_speed = 10.0
+        if speed is None or speed == self.INVALID_SPEED_SENTINEL:
+            bounded_speed = self.MAX_SPEED_THRESHOLD
+        else:
+            try:
+                bounded_speed = max(0.0, min(float(speed), self.MAX_SPEED_THRESHOLD))
+            except (TypeError, ValueError):
+                bounded_speed = self.MAX_SPEED_THRESHOLD
 
-        speed_score = 1.0 - (bounded_speed / 10.0)
-        status_score = 1.0 if status == 'valid' else 0.4 if status == 'unvalidated' else 0.0
-        anonymity_score = self.ANONYMITY_WEIGHTS.get((anonymity or 'unknown').lower(), 0.5)
+        speed_score = 1.0 - (bounded_speed / self.MAX_SPEED_THRESHOLD)
+        status_score = self.STATUS_WEIGHTS.get(status, 0.0)
+        anonymity_score = self.ANONYMITY_WEIGHTS.get(
+            (anonymity or 'unknown').lower(),
+            self.ANONYMITY_WEIGHTS['unknown']
+        )
 
-        return round((speed_score * 50) + (status_score * 30) + (anonymity_score * 20), 2)
+        return round(
+            (speed_score * self.SPEED_WEIGHT)
+            + (status_score * self.STATUS_WEIGHT)
+            + (anonymity_score * self.ANONYMITY_WEIGHT),
+            2
+        )
 
     def get_proxy_details(self, proxy_data: Dict[str, Any] = None, proxy_str: str = None) -> Optional[Dict[str, Any]]:
         """
@@ -121,13 +142,13 @@ class ProxyValidator:
                     return {
                         'proxy': proxy,
                         'status': 'unvalidated',
-                        'speed': 999.99,
+                        'speed': self.INVALID_SPEED_SENTINEL,
                         'last_checked': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'ip': proxy.split(':')[0],
                         'country': proxy_data.get('country', 'unknown'),
                         'anonymity': anonymity,
                         'requires_auth': False,
-                        'quality_score': self.calculate_quality_score('unvalidated', 999.99, anonymity)
+                        'quality_score': self.calculate_quality_score('unvalidated', self.INVALID_SPEED_SENTINEL, anonymity)
                     }
                 return None
             
@@ -186,7 +207,7 @@ class ProxyValidator:
             result = {
                 'proxy': proxy,
                 'status': 'valid' if response and response.status_code == 200 else 'unvalidated',
-                'speed': round(response_time, 2) if response else 999.99,
+                'speed': round(response_time, 2) if response else self.INVALID_SPEED_SENTINEL,
                 'last_checked': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'ip': proxy.split(':')[0],  # Default to the proxy IP
                 'requires_auth': auth_required
@@ -227,7 +248,7 @@ class ProxyValidator:
 
             result['quality_score'] = self.calculate_quality_score(
                 result.get('status', 'unvalidated'),
-                result.get('speed', 999.99),
+                result.get('speed', self.INVALID_SPEED_SENTINEL),
                 result.get('anonymity', 'unknown')
             )
             

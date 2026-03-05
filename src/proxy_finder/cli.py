@@ -82,14 +82,18 @@ def display_proxy_table(proxies: List[Dict[str, Any]], console: Console):
                 else:
                     speed_str = f"[red]{speed_str}s[/red]"
 
-                quality_score = float(proxy.get('quality_score', 0))
-                quality_str = f"{quality_score:.1f}"
-                if quality_score >= 75:
-                    quality_str = f"[green]{quality_str}[/green]"
-                elif quality_score >= 50:
-                    quality_str = f"[yellow]{quality_str}[/yellow]"
+                quality_value = proxy.get('quality_score')
+                if quality_value is None:
+                    quality_str = "[dim]N/A[/dim]"
                 else:
-                    quality_str = f"[red]{quality_str}[/red]"
+                    quality_score = float(quality_value)
+                    quality_str = f"{quality_score:.1f}"
+                    if quality_score >= 75:
+                        quality_str = f"[green]{quality_str}[/green]"
+                    elif quality_score >= 50:
+                        quality_str = f"[yellow]{quality_str}[/yellow]"
+                    else:
+                        quality_str = f"[red]{quality_str}[/red]"
                 
                 # Split proxy into IP and port for better display
                 proxy_str = proxy.get('proxy', '')
