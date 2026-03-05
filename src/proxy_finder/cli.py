@@ -46,6 +46,7 @@ def display_proxy_table(proxies: List[Dict[str, Any]], console: Console):
     table.add_column("Port", style="green", width=8, justify="right")
     table.add_column("Country", style="yellow", width=10)
     table.add_column("Anonymity", style="magenta", width=12)
+    table.add_column("Score", style="bright_green", width=8, justify="right")
     table.add_column("Speed", style="red", width=10)
     table.add_column("Auth", style="blue", width=8)
     table.add_column("Status", style="bright_blue", width=10)
@@ -80,6 +81,19 @@ def display_proxy_table(proxies: List[Dict[str, Any]], console: Console):
                     speed_str = f"[yellow]{speed_str}s[/yellow]"
                 else:
                     speed_str = f"[red]{speed_str}s[/red]"
+
+                quality_value = proxy.get('quality_score')
+                if quality_value is None:
+                    quality_str = "[dim]N/A[/dim]"
+                else:
+                    quality_score = float(quality_value)
+                    quality_str = f"{quality_score:.1f}"
+                    if quality_score >= 75:
+                        quality_str = f"[green]{quality_str}[/green]"
+                    elif quality_score >= 50:
+                        quality_str = f"[yellow]{quality_str}[/yellow]"
+                    else:
+                        quality_str = f"[red]{quality_str}[/red]"
                 
                 # Split proxy into IP and port for better display
                 proxy_str = proxy.get('proxy', '')
@@ -104,6 +118,7 @@ def display_proxy_table(proxies: List[Dict[str, Any]], console: Console):
                     port,
                     proxy.get('country', ''),
                     proxy.get('anonymity', ''),
+                    quality_str,
                     speed_str,
                     proxy.get('auth', ''),
                     status,
@@ -214,7 +229,7 @@ def main():
                         help='Filter by anonymity level')
     parser.add_argument('-t', '--timeout', type=float, default=10.0,
                         help='Connection timeout in seconds')
-    parser.add_argument('-s', '--sort', type=str, choices=['speed', 'country', 'anonymity'],
+    parser.add_argument('-s', '--sort', type=str, choices=['speed', 'country', 'anonymity', 'quality'],
                         default='speed', help='Sort results by this field')
     
     args = parser.parse_args()
@@ -516,6 +531,8 @@ def main():
                 all_proxies = sorted(all_proxies, key=lambda x: x.get('country', ''))
             elif args.sort == 'anonymity':
                 all_proxies = sorted(all_proxies, key=lambda x: x.get('anonymity', ''))
+            elif args.sort == 'quality':
+                all_proxies = sorted(all_proxies, key=lambda x: x.get('quality_score', 0), reverse=True)
             
             # Display the proxies in a formatted table
             display_proxy_table(all_proxies[:args.number], console)
@@ -599,6 +616,8 @@ def main():
                 elif args.sort == 'anonymity':
                     anonymity_rank = {'elite': 0, 'anonymous': 1, 'transparent': 2, 'unknown': 3}
                     proxies.sort(key=lambda x: anonymity_rank.get(x.get('anonymity', 'unknown'), 3))
+                elif args.sort == 'quality':
+                    proxies.sort(key=lambda x: x.get('quality_score', 0), reverse=True)
             
             # Display results
             if proxies:

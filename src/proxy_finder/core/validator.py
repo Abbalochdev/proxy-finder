@@ -11,6 +11,22 @@ logger = logging.getLogger('proxy_finder')
 
 class ProxyValidator:
     """Handles proxy validation and testing."""
+    # Sentinel speed used when a proxy cannot complete an HTTP check.
+    INVALID_SPEED_SENTINEL = 999.99
+    MAX_SPEED_THRESHOLD = 10.0
+    SPEED_WEIGHT = 50
+    STATUS_WEIGHT = 30
+    ANONYMITY_WEIGHT = 20
+    STATUS_WEIGHTS = {
+        'valid': 1.0,
+        'unvalidated': 0.4
+    }
+    ANONYMITY_WEIGHTS = {
+        'elite': 1.0,
+        'anonymous': 0.7,
+        'transparent': 0.4,
+        'unknown': 0.3
+    }
     
     def __init__(self, 
                  timeout: float = 10.0, 
@@ -59,6 +75,34 @@ class ProxyValidator:
             logger.debug(f"Unexpected error during proxy validation for {proxy}: {e}")
             return False
 
+    def calculate_quality_score(self, status: str, speed: float, anonymity: str) -> float:
+        """
+        Calculate a normalized proxy quality score from 0 to 100.
+
+        Prioritizes response speed and validation status, then anonymity level.
+        """
+        if speed is None or speed == self.INVALID_SPEED_SENTINEL:
+            bounded_speed = self.MAX_SPEED_THRESHOLD
+        else:
+            try:
+                bounded_speed = max(0.0, min(float(speed), self.MAX_SPEED_THRESHOLD))
+            except (TypeError, ValueError):
+                bounded_speed = self.MAX_SPEED_THRESHOLD
+
+        speed_score = 1.0 - (bounded_speed / self.MAX_SPEED_THRESHOLD)
+        status_score = self.STATUS_WEIGHTS.get(status, 0.0)
+        anonymity_score = self.ANONYMITY_WEIGHTS.get(
+            (anonymity or 'unknown').lower(),
+            self.ANONYMITY_WEIGHTS['unknown']
+        )
+
+        return round(
+            (speed_score * self.SPEED_WEIGHT)
+            + (status_score * self.STATUS_WEIGHT)
+            + (anonymity_score * self.ANONYMITY_WEIGHT),
+            2
+        )
+
     def get_proxy_details(self, proxy_data: Dict[str, Any] = None, proxy_str: str = None) -> Optional[Dict[str, Any]]:
         """
         Get detailed information about a proxy with quality metrics.
@@ -94,15 +138,17 @@ class ProxyValidator:
                 # We'll create a basic result dict with default values
                 if proxy_data:
                     # Return a basic result with known data but mark as unvalidated
+                    anonymity = proxy_data.get('anonymity', 'unknown')
                     return {
                         'proxy': proxy,
                         'status': 'unvalidated',
-                        'speed': 999.99,
+                        'speed': self.INVALID_SPEED_SENTINEL,
                         'last_checked': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'ip': proxy.split(':')[0],
                         'country': proxy_data.get('country', 'unknown'),
-                        'anonymity': proxy_data.get('anonymity', 'unknown'),
-                        'requires_auth': False
+                        'anonymity': anonymity,
+                        'requires_auth': False,
+                        'quality_score': self.calculate_quality_score('unvalidated', self.INVALID_SPEED_SENTINEL, anonymity)
                     }
                 return None
             
@@ -161,7 +207,7 @@ class ProxyValidator:
             result = {
                 'proxy': proxy,
                 'status': 'valid' if response and response.status_code == 200 else 'unvalidated',
-                'speed': round(response_time, 2) if response else 999.99,
+                'speed': round(response_time, 2) if response else self.INVALID_SPEED_SENTINEL,
                 'last_checked': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'ip': proxy.split(':')[0],  # Default to the proxy IP
                 'requires_auth': auth_required
@@ -199,6 +245,12 @@ class ProxyValidator:
                     result['anonymity'] = 'anonymous'  # Medium speed proxies are often anonymous
                 else:
                     result['anonymity'] = 'transparent'  # Slow proxies are often transparent
+
+            result['quality_score'] = self.calculate_quality_score(
+                result.get('status', 'unvalidated'),
+                result.get('speed', self.INVALID_SPEED_SENTINEL),
+                result.get('anonymity', 'unknown')
+            )
             
             logger.debug(f"Proxy details for {proxy}: {result}")
             return result
