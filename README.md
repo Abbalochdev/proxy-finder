@@ -85,6 +85,9 @@ proxy-finder fetch -s country -n 5
 
 # Sort by anonymity level
 proxy-finder fetch -s anonymity -n 5
+
+# Sort by computed quality score (best overall first)
+proxy-finder fetch -s quality -n 5
 ```
 
 ## Command Reference
@@ -101,7 +104,7 @@ proxy-finder countries # List available countries
 -c, --country   # Two-letter country code (e.g., US, GB)
 -a, --anonymity # Anonymity level (transparent, anonymous, elite)
 -t, --timeout   # Connection timeout in seconds
--s, --sort      # Sort results by field (speed, country, anonymity)
+-s, --sort      # Sort results by field (speed, country, anonymity, quality)
 ```
 
 ## Proxy Information
@@ -111,6 +114,7 @@ Each proxy displays the following information:
 - IP Address and Port
 - Country of origin
 - Anonymity level
+- Quality score (0-100)
 - Response speed
 - Authentication status
 - Last checked timestamp
